@@ -129,6 +129,7 @@ export default class TLVFilter extends EventEmitter {
 
     private _remoteControlKeyIdMap?: Map<number, number>;
     private _logoTransmissions: Map<number, {
+        serviceId: number;
         startSectionNumber: number;
         numberOfSections: number;
         logoVersion: number;
@@ -379,6 +380,7 @@ export default class TLVFilter extends EventEmitter {
                             const p = this._logoTransmissions.get(logoId);
                             if (!p || p.logoVersion !== desc.logoVersion) {
                                 this._logoTransmissions.set(logoId, {
+                                    serviceId: service.serviceId,
                                     startSectionNumber: largeLogo.startSectionNumber,
                                     numberOfSections: largeLogo.numOfSections,
                                     logoVersion: desc.logoVersion,
@@ -486,7 +488,7 @@ export default class TLVFilter extends EventEmitter {
             return;
         }
 
-        if (trans.data[cdt.sectionNumber - trans.startSectionNumber] !== null) {
+        if (trans.data[cdt.sectionNumber - trans.startSectionNumber] !== undefined) {
             return;
         }
 
@@ -499,6 +501,11 @@ export default class TLVFilter extends EventEmitter {
         trans.data = [];
         log.debug("TLVFilter#_onCDT: received logo data (networkId=%d, logoId=%d)", cdt.originalNetworkId, cdt.dataModule.logoId);
         Service.saveLogoData(cdt.originalNetworkId, cdt.dataModule.logoId, data);
+
+        const service = _.service.get(cdt.originalNetworkId, trans.serviceId);
+        if (service) {
+            service.logoId = cdt.dataModule.logoId;
+        }
     }
 
     private _observeProvideEvent(): void {
