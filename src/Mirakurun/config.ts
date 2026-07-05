@@ -100,14 +100,15 @@ export async function loadServer(): Promise<Server> {
     }
     if (!config.allowOrigins) {
         config.allowOrigins = [
-            "https://mirakurun-secure-contexts-api.pages.dev"
+            "https://mirakurun-secure-contexts-api.pages.dev",
+            "https://webcodecs.ts-live-hevc-4k.pages.dev"
         ];
     }
     if (!config.allowPNA) {
         config.allowPNA = true;
     }
     if (!config.tsplayEndpoint) {
-        config.tsplayEndpoint = "https://mirakurun-secure-contexts-api.pages.dev/tsplay/";
+        config.tsplayEndpoint = "https://webcodecs.ts-live-hevc-4k.pages.dev/";
     }
 
     // Docker
