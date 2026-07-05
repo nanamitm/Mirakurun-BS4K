@@ -2,9 +2,75 @@
 
 see [Commit Logs](https://github.com/Chinachu/Mirakurun/commits/master) to check all.
 
+## 4.1.3 (2026-06-28)
+
+### Docker
+
+- 🆙 ベースイメージを `node:24.16.0-bookworm` → `node:24.18.0-bookworm` に更新
+
+### Server
+
+- 🐛 EPG: `extended_event` で同じラベル（例: 番組内容）を重複して受信した場合に文字化けする問題を修正
+
+## 4.1.2 (2026-06-19)
+
+### Server
+
+- 🐛 TunerDevice: remote decoder を有効にしている場合でも decoder が定義されている場合は remote/local 両方で decoder 処理をしてしまうバグの修正
+
+### UI
+
+- ✨ HomeView: 局ロゴ見切れの修正とその他スタイルの調整
+- ✨ HomeView: サービス一覧から EPG 番組表へのリンクを追加
+
+## 4.1.1 (2026-06-15)
+
+動作環境やユースケースを鑑みて、このバージョンから、このプロジェクトは基本的に日本語を使用します。ドキュメントや UI 等も順次日本語となります。何卒ご了承下さい 🙏
+
+### Known Issues
+
+- **UI**
+  - Home: 旧 UI からの仮移植です。表示崩れや余白不足、局ロゴの見切れがあります。
+
+### Docker
+
+- 🆙 ベースイメージを `node:22.14.0-bookworm` → `node:24.16.0-bookworm` に更新
+
+### Server
+
+- 🆙 Node.js エンジン要件: `^18 || ^20 || ^22` → `^22 || ^24`
+- 👾 Config: allowPNA の型チェックを修正 (*bug*)
+
+### UI
+
+- ✨ Fluent UI から Blueprint へ UI ベースコンポーネントを変更し、UI を刷新
+- 🆕 ライトテーマ / ダークテーマ の切り替え
+- 🆕 EPG, 番組検索, 番組詳細表示
+
 ## About 4.0.0
 
 **Important Notice**: Mirakurun 4.0.0 includes significant performance improvements, enhanced EPG processing, asynchronous file I/O operations, and new features. As announced in 3.9.0, the experimental Win32 support has been completely removed.
+
+## 4.0.0-beta.17 (2025-04-11)
+
+### Server Changes
+
+- **Service**:
+  - Fixed a bug in the loading services.
+
+## 4.0.0-beta.17 (2025-04-10)
+
+### Server Changes
+
+- **Server**:
+  - Allow access to the Web UI through the allowOrigins setting.
+- **Channel**:
+  - Fixed a bug in the readyFn of EPG gatherer job.
+- **Tuner**:
+  - Improved readyForJob logic for better tuner selection.
+  - Added logging for tuner selection process.
+- **TunerDevice**:
+  - Added channel type to command template replacement.
 
 ## 4.0.0-beta.16 (2025-04-01)
 

@@ -25,16 +25,13 @@ stages:
   - job: Build
     strategy:
       matrix:
-        v18:
-          NODE_VERSION_SPEC: '18.x'
-          NPM_VERSION: '10'
-        v20:
-          NODE_VERSION_SPEC: '20.x'
-          NPM_VERSION: '11'
         v22:
           NODE_VERSION_SPEC: '22.x'
           NPM_VERSION: '11'
-      maxParallel: '3'
+        v24:
+          NODE_VERSION_SPEC: '24.x'
+          NPM_VERSION: '11'
+      maxParallel: '2'
     pool:
       vmImage: 'ubuntu-22.04'
     steps:
@@ -55,27 +52,6 @@ stages:
     - script: npm run clean
       displayName: npm run clean
 
-- stage: Publish
-  condition: |
-    and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
-  jobs:
-  - job: Publish
-    pool:
-      vmImage: 'ubuntu-22.04'
-    steps:
-    - checkout: self
-      submodules: 'true'
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '22.x'
-    - script: npm ci
-      displayName: npm ci
-    - task: Npm@1
-      displayName: npm publish
-      inputs:
-        command: publish
-        publishEndpoint: npm
-
 - stage: DockerBuildAndPush
   condition: |
     and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
@@ -86,13 +62,10 @@ stages:
         AMD64:
           ARCH: 'amd64'
           PLATFORM: 'linux/amd64'
-        ARMv7:
-          ARCH: 'arm32v7'
-          PLATFORM: 'linux/arm/v7'
         ARMv8:
           ARCH: 'arm64v8'
           PLATFORM: 'linux/arm64/v8'
-      maxParallel: '3'
+      maxParallel: '2'
     pool:
       vmImage: 'ubuntu-22.04'
     steps:
@@ -142,12 +115,10 @@ stages:
         export DOCKER_CLI_EXPERIMENTAL=enabled
         docker manifest create $REPOSITORY_NAME:$(tag) \
           $REPOSITORY_NAME:amd64-$(tag) \
-          $REPOSITORY_NAME:arm32v7-$(tag) \
           $REPOSITORY_NAME:arm64v8-$(tag)
         docker manifest push $REPOSITORY_NAME:$(tag)
         docker manifest create $REPOSITORY_NAME:latest \
           $REPOSITORY_NAME:amd64-latest \
-          $REPOSITORY_NAME:arm32v7-latest \
           $REPOSITORY_NAME:arm64v8-latest
         docker manifest push $REPOSITORY_NAME:latest
       # see: https://docs.docker.com/engine/reference/commandline/manifest/#create-and-push-a-manifest-list
@@ -156,3 +127,24 @@ stages:
       inputs:
         containerRegistry: 'Docker Hub'
         command: 'logout'
+
+- stage: Publish
+  condition: |
+    and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/'))
+  jobs:
+  - job: Publish
+    pool:
+      vmImage: 'ubuntu-22.04'
+    steps:
+    - checkout: self
+      submodules: 'true'
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '24.x'
+    - script: npm ci
+      displayName: npm ci
+    - task: Npm@1
+      displayName: npm publish
+      inputs:
+        command: publish
+        publishEndpoint: npm
