@@ -248,9 +248,9 @@ export class Channel {
                                 service.epgReady = false;
                             }
                         }
-
-                        return _.tuner.readyForJob(service.channel);
                     }
+
+                    return _.tuner.readyForJob(service.channel);
                 }
             });
         }

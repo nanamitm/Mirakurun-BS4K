@@ -101,7 +101,10 @@ export default class TunerDevice extends EventEmitter {
         });
     }
 
-    get decoder(): string {
+    get decoder(): string | null {
+        if (this._isRemote && this._config.remoteMirakurunDecoder === true) {
+            return null;
+        }
         return this._config.decoder || null;
     }
 
@@ -266,6 +269,7 @@ export default class TunerDevice extends EventEmitter {
 
         cmd = common.replaceCommandTemplate(cmd, {
             channel: ch.channel,
+            type: ch.type,
             satelite: ch.commandVars?.satellite || "", // deprecated, for backward compatibility
             space: 0, // default value for backward compatibility
             ...ch.commandVars

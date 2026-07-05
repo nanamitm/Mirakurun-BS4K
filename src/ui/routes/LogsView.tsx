@@ -1,5 +1,5 @@
 /*
-   Copyright 2020 kanreisa
+   Copyright 2026 kanreisa
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -13,18 +13,23 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
-import EventEmitter from "eventemitter3";
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { Client as RPCClient } from "jsonrpc2-ws";
 import { JoinParams } from "../../../lib/Mirakurun/rpc.d";
-import "./Logs.css";
+import { state } from "../modules/state";
+import * as ui from "../modules/ui";
+
+import "./LogsView.sass";
 
 let _itemId = 0;
-
 let logListCache: JSX.Element[] = [];
 
-const LogsView: React.FC<{ uiStateEvents: EventEmitter, rpc: RPCClient }> = ({ uiStateEvents, rpc }) => {
+export const LogsView: React.FC = () => {
+    console.debug("routes", "LogsView");
+
+    ui.setTitle("ログ");
+
     const [logList, setLogList] = useState<JSX.Element[]>([]);
     const latestRef = useRef<HTMLDivElement>(null);
 
@@ -49,37 +54,51 @@ const LogsView: React.FC<{ uiStateEvents: EventEmitter, rpc: RPCClient }> = ({ u
     };
 
     useEffect(() => {
+        const rpc = (state as any)._rpc as RPCClient;
+
         const join = () => {
             rpc.call("join", { rooms: ["logs"] } as JoinParams);
         };
-        rpc.on("connected", join);
-        join();
 
+        rpc.on("connected", join);
+
+        // 既に接続済みなら即座に join、そうでなければ connected イベントを待つ
+        if (rpc.isConnected()) {
+            join();
+        }
+
+        // 初期ログを取得
         (async () => {
             const lines: string = await (await fetch("/api/log")).text();
             onLogs(lines.trim().split("\n"), true);
         })();
 
-        uiStateEvents.on("data:logs", onLogs);
+        // state の logs イベントをサブスクライブ
+        const onLogsEvent = (lines: string[], unshift: boolean) => {
+            onLogs(lines, unshift);
+        };
+        state.on("logs", onLogsEvent);
 
         return () => {
             rpc.off("connected", join);
-            rpc.call("leave", { rooms: ["logs"] } as JoinParams);
-            uiStateEvents.off("data:logs", onLogs);
+            if (rpc.isConnected()) {
+                rpc.call("leave", { rooms: ["logs"] } as JoinParams);
+            }
+            state.off("logs", onLogsEvent);
             logListCache = [];
         };
     }, []);
 
     useEffect(() => {
-        latestRef.current.scrollIntoView();
+        latestRef.current?.scrollIntoView();
     });
 
     return (
-        <div className="logs" style={{ margin: "8px 0" }}>
-            {logList}
-            <div className="latest" ref={latestRef}></div>
+        <div id="route-logs-view">
+            <div className="logs">
+                {logList}
+                <div className="latest" ref={latestRef}></div>
+            </div>
         </div>
     );
 };
-
-export default LogsView;
