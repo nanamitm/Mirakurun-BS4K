@@ -41,7 +41,7 @@ import { ConfigChannels, ConfigChannelsItem, ChannelType, ChannelScanStatus } fr
 import "./ChannelsConfigView.sass";
 
 const configAPI = "/api/config/channels";
-const typesIndex = ["GR", "BS", "CS", "SKY"];
+const typesIndex = ["GR", "BS", "CS", "SKY", "BS4K"];
 
 function sortTypes(types: ChannelType[]): ChannelType[] {
     return types.sort((a, b) => typesIndex.indexOf(a) - typesIndex.indexOf(b));
@@ -150,8 +150,10 @@ export const ChannelsConfigView: React.FC = () => {
         try {
             const params = new URLSearchParams();
             params.append("type", scanType);
-            params.append("minCh", scanMinCh);
-            params.append("maxCh", scanMaxCh);
+            if (scanType !== "BS4K") {
+                params.append("minCh", scanMinCh);
+                params.append("maxCh", scanMaxCh);
+            }
 
             if (scanSkipCh.trim()) {
                 const expandedSkipCh = expandChannelRanges(scanSkipCh.trim());
@@ -564,7 +566,8 @@ export const ChannelsConfigView: React.FC = () => {
                                             { value: "GR", label: "GR" },
                                             { value: "BS", label: "BS" },
                                             { value: "CS", label: "CS" },
-                                            { value: "SKY", label: "SKY" }
+                                            { value: "SKY", label: "SKY" },
+                                            { value: "BS4K", label: "BS4K" }
                                         ]}
                                     />
                                 </td>
@@ -738,30 +741,41 @@ export const ChannelsConfigView: React.FC = () => {
                                             setScanMinCh("2");
                                             setScanMaxCh("24");
                                             break;
+                                        case "BS4K":
+                                            setScanMinCh("");
+                                            setScanMaxCh("");
+                                            break;
                                     }
                                 }}
                                 options={[
                                     { value: "GR", label: "GR" },
                                     { value: "BS", label: "BS" },
-                                    { value: "CS", label: "CS" }
+                                    { value: "CS", label: "CS" },
+                                    { value: "BS4K", label: "BS4K" }
                                 ]}
                             />
                         </FormGroup>
 
-                        <div style={{ display: "flex", gap: "16px" }}>
-                            <FormGroup label="Min Channel" style={{ flex: 1 }}>
-                                <InputGroup
-                                    value={scanMinCh}
-                                    onChange={(e) => setScanMinCh(e.target.value)}
-                                />
-                            </FormGroup>
-                            <FormGroup label="Max Channel" style={{ flex: 1 }}>
-                                <InputGroup
-                                    value={scanMaxCh}
-                                    onChange={(e) => setScanMaxCh(e.target.value)}
-                                />
-                            </FormGroup>
-                        </div>
+                        {scanType === "BS4K" ? (
+                            <Callout intent="primary">
+                                BS4K は NIT から自動的に全 TLV ストリームを探索します。チャンネル範囲の指定は不要です。
+                            </Callout>
+                        ) : (
+                            <div style={{ display: "flex", gap: "16px" }}>
+                                <FormGroup label="Min Channel" style={{ flex: 1 }}>
+                                    <InputGroup
+                                        value={scanMinCh}
+                                        onChange={(e) => setScanMinCh(e.target.value)}
+                                    />
+                                </FormGroup>
+                                <FormGroup label="Max Channel" style={{ flex: 1 }}>
+                                    <InputGroup
+                                        value={scanMaxCh}
+                                        onChange={(e) => setScanMaxCh(e.target.value)}
+                                    />
+                                </FormGroup>
+                            </div>
+                        )}
 
                         <FormGroup
                             label="Skip Channels (comma separated integers)"
