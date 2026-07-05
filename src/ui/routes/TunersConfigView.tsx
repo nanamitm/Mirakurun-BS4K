@@ -34,6 +34,7 @@ import {
 import equal from "fast-deep-equal";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
+import { ConfigImportExportControls } from "../components/ConfigImportExportControls";
 import { ConfigTuners, ConfigTunersItem, ChannelType } from "../../../api.d";
 
 import "./TunersConfigView.sass";
@@ -174,6 +175,10 @@ export const TunersConfigView: React.FC = () => {
             </Navbar.Group>
 
             <Navbar.Group align={Alignment.END}>
+                <ConfigImportExportControls onImported={() => setSaved(true)} />
+
+                <Navbar.Divider />
+
                 <Button
                     minimal
                     intent="success"
