@@ -410,6 +410,7 @@ export interface Status {
     };
     epg: {
         gatheringNetworks: NetworkId[];
+        gatheringChannels?: string[];
         storedEvents: number;
     };
     rpcCount: number;

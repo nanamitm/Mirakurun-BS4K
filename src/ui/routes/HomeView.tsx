@@ -165,7 +165,10 @@ const ServicesSection: React.FC<{
                                 <span className="service-name">{service.name}</span>
                                 <span className="service-epg-status">
                                     {
-                                        status?.epg.gatheringNetworks.includes(service.networkId) && <Icon icon="refresh" className="color-warning" size={12} /> ||
+                                        (service.channel?.type === "BS4K"
+                                            ? status?.epg.gatheringChannels?.includes(service.channel?.channel)
+                                            : status?.epg.gatheringNetworks.includes(service.networkId)
+                                        ) && <Icon icon="refresh" className="color-warning" size={12} /> ||
                                         service.epgReady && <Icon icon="tick" className="color-epg-ready" size={12} /> ||
                                         <Icon icon="time" className="bp5-text-muted" size={12} />
                                     }

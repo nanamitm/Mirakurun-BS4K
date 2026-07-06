@@ -110,22 +110,7 @@ export function getStatus(): apid.Status {
         }
     }
 
-    for (const channelId in status.epgByChannel) {
-        if (status.epgByChannel[channelId] !== true) {
-            continue;
-        }
-
-        const channel = _.channel.get("BS4K", channelId);
-        if (!channel) {
-            continue;
-        }
-
-        for (const service of channel.getServices()) {
-            if (!ret.epg.gatheringNetworks.includes(service.networkId)) {
-                ret.epg.gatheringNetworks.push(service.networkId);
-            }
-        }
-    }
+    ret.epg.gatheringChannels = Object.keys(status.epgByChannel).filter(ch => status.epgByChannel[ch] === true);
 
     return ret;
 }
