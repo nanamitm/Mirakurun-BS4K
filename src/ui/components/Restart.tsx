@@ -14,34 +14,64 @@
    limitations under the License.
 */
 import * as React from "react";
-import { Button, Dialog, DialogBody, DialogFooter } from "@blueprintjs/core";
+import { useState } from "react";
+import { Button, Dialog, DialogBody, DialogFooter, Spinner } from "@blueprintjs/core";
 
 export const Restart: React.FC<{
     isOpen: boolean;
     onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-    const handleRestart = async () => {
-        await fetch("/api/restart", { method: "PUT" });
+    const [restarting, setRestarting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleClose = () => {
+        setRestarting(false);
+        setError(null);
         onClose();
+    };
+
+    const handleRestart = async () => {
+        setRestarting(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/restart", { method: "PUT" });
+            if (res.status === 202) {
+                // サーバーが終了するので接続が切れる。state.ts の RPC 再接続に任せてダイアログを閉じる。
+                onClose();
+            } else {
+                setError(`Not supported in this environment (HTTP ${res.status}).`);
+                setRestarting(false);
+            }
+        } catch {
+            // サーバーが即座に落ちた場合もここに来るが、再起動は成功している
+            onClose();
+        }
     };
 
     return (
         <Dialog
             isOpen={isOpen}
-            onClose={onClose}
+            onClose={restarting ? undefined : handleClose}
             title="Restart Mirakurun"
-            canEscapeKeyClose
+            canEscapeKeyClose={!restarting}
         >
             <DialogBody>
-                <div>
-                    Do you want to restart Mirakurun?
-                </div>
+                {restarting ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <Spinner size={16} />
+                        <span>Restarting...</span>
+                    </div>
+                ) : error ? (
+                    <p className="bp5-text-danger">{error}</p>
+                ) : (
+                    <p>Do you want to restart Mirakurun?</p>
+                )}
             </DialogBody>
             <DialogFooter
                 actions={
                     <>
-                        <Button text="Cancel" onClick={onClose} />
-                        <Button text="Restart" intent="danger" onClick={handleRestart} />
+                        <Button text="Cancel" disabled={restarting} onClick={handleClose} />
+                        <Button text="Restart" intent="danger" disabled={restarting} onClick={handleRestart} />
                     </>
                 }
             />

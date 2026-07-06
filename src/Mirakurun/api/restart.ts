@@ -15,7 +15,10 @@
 */
 import { Operation } from "express-openapi";
 import { spawn } from "child_process";
+import { writeFileSync } from "fs";
 import * as api from "../api";
+
+const RESTART_TRIGGER = "/data/local/tmp/.mirakurun-restart";
 
 export const put: Operation = (req, res) => {
     if (process.env.pm_uptime) {
@@ -32,6 +35,12 @@ export const put: Operation = (req, res) => {
         res.status(202);
         res.end(JSON.stringify({ _exit: 0 }));
         setTimeout(() => process.kill(parseInt(process.env.INIT_PID, 10), 1), 0);
+    } else if (process.env.MIRAKURUN_RESTART) {
+        writeFileSync(RESTART_TRIGGER, "1");
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.status(202);
+        res.end(JSON.stringify({ _restart: true }));
+        setTimeout(() => process.exit(0), 500);
     } else {
         api.responseError(res, 500);
     }
