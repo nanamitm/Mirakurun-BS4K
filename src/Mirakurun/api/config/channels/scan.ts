@@ -217,11 +217,18 @@ export function generateScanConfig(option: ChannelScanOption): ScanConfig | unde
                 ...satelliteOptions
             };
 
-            // Generate cross product of channels and subchannels
+            // Generate cross product of channels and subchannels.
+            // ISDB-S (BS 2K) only uses odd-numbered transponders (BS01, BS03, ..., BS23).
+            // When the user has not specified an explicit channel range, filter to odd
+            // transponders to avoid scanning non-existent even-numbered ones.
+            const userSpecifiedRange = option.startCh !== undefined || option.endCh !== undefined;
+            const tpList = range(bsSubchOptions.startCh, bsSubchOptions.endCh)
+                .filter(ch => userSpecifiedRange || ch % 2 === 1);
+
             const channels: string[] = [];
             const channelFormat = bsSubchOptions.channelNameFormat || CHANNEL_NAME_FORMAT_BS_SUBCH;
 
-            for (const ch of range(bsSubchOptions.startCh, bsSubchOptions.endCh)) {
+            for (const ch of tpList) {
                 for (const subCh of range(bsSubchOptions.startSubCh, bsSubchOptions.endSubCh)) {
                     channels.push(formatChannelName(channelFormat, ch, subCh));
                 }
