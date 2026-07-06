@@ -25,6 +25,15 @@ import { useLocalStorageState } from "../hooks/useWebStorageState";
 
 import { ChannelType } from "../../../api";
 
+const CHANNEL_TYPE_ORDER: ChannelType[] = ["GR", "BS", "BS4K", "CS", "SKY"];
+const CHANNEL_TYPE_LABEL: Record<string, string> = {
+    GR: "地上",
+    BS: "BS",
+    BS4K: "BS4K",
+    CS: "CS",
+    SKY: "SKY",
+};
+
 import { WatchButton } from "../components/WatchButton";
 import { EPGTable } from "../components/EPGTable";
 
@@ -37,6 +46,26 @@ export const EPGView: React.FC = () => {
     const [channelType, setChannelType] = useLocalStorageState<ChannelType>("EPG.channelType", "GR");
     const [programId, setProgramId] = useState<number>(null);
     const [time, setTime] = useState<number>(null);
+
+    const [tuners, setTuners] = useState(state.tuners);
+    useEffect(() => {
+        const onTuners = () => setTuners([...state.tuners]);
+        state.on("tuners", onTuners);
+        return () => { state.off("tuners", onTuners); };
+    }, []);
+
+    // チューナー設定に含まれる type だけ選択肢に出す。未ロード時は全種表示。
+    const typeOptions = useMemo(() => {
+        const available = tuners.length > 0
+            ? new Set(tuners.flatMap(t => t.types as ChannelType[]))
+            : new Set(CHANNEL_TYPE_ORDER);
+        return [
+            { value: "ALL", label: "全波" },
+            ...CHANNEL_TYPE_ORDER
+                .filter(t => available.has(t))
+                .map(t => ({ value: t, label: CHANNEL_TYPE_LABEL[t] }))
+        ];
+    }, [tuners]);
     const globalServiceId = parseInt(params.globalServiceId, 10) || null;
     const programIdQuery = searchParams.get("programId");
     const typeQuery = searchParams.get("type");
@@ -161,13 +190,7 @@ export const EPGView: React.FC = () => {
 
                             <HTMLSelect
                                 className="bp5-outlined"
-                                options={[
-                                    { value: "ALL", label: "全波" },
-                                    { value: "GR", label: "地上" },
-                                    { value: "BS" },
-                                    { value: "CS" },
-                                    { value: "SKY" },
-                                ]}
+                                options={typeOptions}
                                 value={channelType || ""}
                                 onChange={event => {
                                     ui.blur();
