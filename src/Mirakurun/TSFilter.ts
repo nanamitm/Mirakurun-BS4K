@@ -737,6 +737,8 @@ export default class TSFilter extends EventEmitter {
 
             const dataModule = new tsDataModule.TsDataModuleLogo(dlData).decode();
             for (const logo of dataModule.logos) {
+                const logoData = new TsLogo(logo.data_byte).decode(); // png
+                let logoFileSaved = false;
                 for (const logoService of logo.services) {
                     const service = _.service.get(logoService.original_network_id, logoService.service_id);
                     if (!service) {
@@ -747,11 +749,13 @@ export default class TSFilter extends EventEmitter {
 
                     log.debug("TSFilter#_onDSMCC: received logo data (networkId=%d, logoId=%d)", service.networkId, service.logoId);
 
-                    const logoData = new TsLogo(logo.data_byte).decode(); // png
-                    Service.saveLogoData(service.networkId, service.logoId, logoData);
-                    break;
+                    if (!logoFileSaved) {
+                        Service.saveLogoData(service.networkId, service.logoId, logoData);
+                        logoFileSaved = true;
+                    }
                 }
             }
+            _.service.save();
         } else if (data.table_id === 0x3B) {
             // DII - Download Info Indication
             const dii = data.message;
