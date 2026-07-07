@@ -339,7 +339,10 @@ export class Tuner {
     ): Promise<{ transportStreamId: number; originalNetworkId: number; frequencyKHz: number; }[]> {
         const tsFilter = await this._initTS({
             id: "Mirakurun:scanBSNit()",
-            priority: -1,
+            // 単一チューナー機でも手動スキャンを確実に実行できるよう優先度 0 で要求する。
+            // これにより実行中の EPG 取得 (優先度 -1) を横取りできる一方、録画/視聴
+            // (優先度 0) は横取りできないため実利用は妨げない。
+            priority: 0,
             disableDecoder: true,
             streamSetting: {
                 channel,
