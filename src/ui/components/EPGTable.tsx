@@ -82,6 +82,7 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
     const [services, setServices] = useState<Service[]>(null);
     const [serviceItems, setServiceItems] = useState<JSX.Element[]>(null);
     const [timetableCols, setTimetableCols] = useState<JSX.Element[]>(null);
+    const [programsLoaded, setProgramsLoaded] = useState<boolean>(state.programsLoaded);
 
     if (globalServiceId) {
         // 週間番組表
@@ -94,6 +95,7 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
 
     useEffect(() => {
         const onUpdated = () => {
+            setProgramsLoaded(state.programsLoaded);
             setReload(Date.now());
         }
         const onUpdatedLazy = new LazyCaller(0, 1000, onUpdated);
@@ -128,6 +130,15 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
             setTimetableCols(null);
         };
     }, [channelType]);
+
+    // 全番組フェッチ完了の瞬間は、再計算前の古い空 timetableCols が残り
+    // 一瞬「放送イベントなし」が見える。ロード完了時に null へ戻し、
+    // 再計算が終わるまでスピナー表示に留める。
+    useEffect(() => {
+        if (programsLoaded) {
+            setTimetableCols(null);
+        }
+    }, [programsLoaded]);
 
     // 採寸
     useEffect(() => {
@@ -622,7 +633,7 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
                 }
             </ScrollContainer>
 
-            {(!state.programsLoaded || state.services.length === 0) && !error && <>
+            {(!programsLoaded || state.services.length === 0) && !error && <>
                 <NonIdealState
                     icon={<Spinner />}
                     title="ロード中"
