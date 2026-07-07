@@ -20,7 +20,6 @@ import { state } from "../modules/state";
 import { useLocalStorageState } from "../hooks/useWebStorageState";
 import { VersionStatus } from "./VersionStatus";
 import { Restart } from "./Restart";
-import { BSTSIDScan } from "./BSTSIDScan";
 
 import "./Nav.sass";
 
@@ -84,7 +83,6 @@ export const Nav: React.FC<NavProps> = ({ pathLv1 }) => {
     const [runningJobs, setRunningJobs] = useState<number>(state.jobs.filter((job) => job.status === "running").length);
 
     const [restartDialogOpen, setRestartDialogOpen] = useState<boolean>(false);
-    const [scanDialogOpen, setScanDialogOpen] = useState<boolean>(false);
     useEffect(() => {
         const onJobs = () => {
             setRunningJobs(state.jobs.filter((job) => job.status === "running").length);
@@ -153,8 +151,6 @@ export const Nav: React.FC<NavProps> = ({ pathLv1 }) => {
                             <MenuItem onClick={() => { state.navigate("/config/tuners"); }} icon="wrench" text="チューナー設定" />
                             <MenuItem onClick={() => { state.navigate("/config/channels"); }} icon="wrench" text="チャンネル設定" />
                             <MenuDivider />
-                            <MenuItem icon="geosearch" text="Scan BS TSID..." onClick={() => setScanDialogOpen(true)} />
-                            <MenuDivider />
                             <MenuItem onClick={() => { window.open("/api/debug", "_blank"); }} icon="document" text="API Docs" />
                             <MenuDivider />
                             <MenuItem onClick={() => { state.navigate("/about"); }} icon="info-sign" textClassName="product-name" text={`Mirakurun ${version} について`} />
@@ -167,7 +163,6 @@ export const Nav: React.FC<NavProps> = ({ pathLv1 }) => {
                     )}
                 />
                 <Restart isOpen={restartDialogOpen} onClose={() => setRestartDialogOpen(false)} />
-                <BSTSIDScan isOpen={scanDialogOpen} onClose={() => setScanDialogOpen(false)} />
             </Navbar.Group>
         </Navbar>
     );

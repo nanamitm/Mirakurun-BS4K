@@ -37,6 +37,7 @@ import equal from "fast-deep-equal";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
 import { ConfigImportExportControls } from "../components/ConfigImportExportControls";
+import { BSTSIDScan } from "../components/BSTSIDScan";
 import { ConfigChannels, ConfigChannelsItem, ChannelType, ChannelScanStatus } from "../../../api.d";
 
 import "./ChannelsConfigView.sass";
@@ -110,6 +111,7 @@ export const ChannelsConfigView: React.FC = () => {
 
     // チャンネルスキャンのためのステート
     const [showScanDialog, setShowScanDialog] = useState(false);
+    const [showBSTSIDScan, setShowBSTSIDScan] = useState(false);
     const [scanType, setScanType] = useState<ChannelType>("GR");
     const [scanMinCh, setScanMinCh] = useState("13");
     const [scanMaxCh, setScanMaxCh] = useState("62");
@@ -447,6 +449,15 @@ export const ChannelsConfigView: React.FC = () => {
                     onClick={() => setShowScanDialog(true)}
                     disabled={scanInProgress}
                 />
+                <Button
+                    minimal
+                    intent="warning"
+                    icon="geosearch"
+                    text="Scan BS TSID"
+                    onClick={() => setShowBSTSIDScan(true)}
+                    disabled={scanInProgress}
+                />
+                <BSTSIDScan isOpen={showBSTSIDScan} onClose={() => setShowBSTSIDScan(false)} />
 
                 <Navbar.Divider />
 
