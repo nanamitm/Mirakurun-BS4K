@@ -171,11 +171,14 @@ export default class ServiceItem {
             case "BS":
                 order = "2";
                 break;
-            case "CS":
+            case "BS4K":
                 order = "3";
                 break;
-            case "SKY":
+            case "CS":
                 order = "4";
+                break;
+            case "SKY":
+                order = "5";
                 break;
         }
 
