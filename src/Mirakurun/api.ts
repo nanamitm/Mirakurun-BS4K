@@ -13,9 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
-import { promisify } from "util";
-import * as yieldableJSON from "yieldable-json";
-const stringifyAsync = promisify(yieldableJSON.stringifyAsync);
 import * as express from "express";
 
 export interface Error {
@@ -54,17 +51,20 @@ export function responseStreamErrorHandler(res: express.Response, err: NodeJS.Er
     return responseError(res, 500, err.message);
 }
 
-export async function responseJSON(res: express.Response, body: any): Promise<express.Response> {
-    // 大きな配列 (例: 全番組 /api/programs は 15MB 超) は yieldable-json での
-    // 文字列化に数十秒かかることがある。responseJSON は文字列化が完了するまで
-    // 1 バイトも送信しないため、その間ソケットは無通信となり、Server 側の
-    // socket timeout (既定 15 秒) に達すると接続が破棄されて空応答になる。
-    // 非力な実機でも巨大 JSON を返しきれるよう、この応答に限りタイムアウトを延長する。
+export function responseJSON(res: express.Response, body: any): express.Response {
+    // 直列化には native JSON.stringify を用いる。
+    // 以前は yieldable-json の stringifyAsync を使っていたが、これはイベント
+    // ループを塞がない代わりに極端に遅く、全番組 /api/programs (15MB 超) では
+    // 非力な実機で直列化に ~26 秒かかっていた。responseJSON は直列化が終わる
+    // まで 1 バイトも送信しないため、その間ソケットが無通信となり Server 側の
+    // socket timeout (既定 15 秒) で接続破棄→空応答になっていた。
+    // native は一瞬イベントループを塞ぐが桁違いに速く (15MB でも 1 秒未満)、
+    // この構成 (単一チューナー機・視聴/録画中は番組表を開かない) では実害がない。
+    // 念のため応答ソケットのタイムアウトも延長しておく。
     res.setTimeout(1000 * 60 * 2); // 2 min.
-    // this is lighter than res.json()
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200);
-    res.end(await stringifyAsync(body));
+    res.end(JSON.stringify(body));
 
     return res;
 }
