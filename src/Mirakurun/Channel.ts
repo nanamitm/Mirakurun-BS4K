@@ -45,7 +45,7 @@ export class Channel {
 
             _.job.addSchedule({
                 key: epgJob.key,
-                schedule: _.config.server.epgGatheringJobSchedule || "20,50 * * * *",
+                schedule: _.config.server.epgGatheringJobSchedule || "25 * * * *",
                 job: epgJob
             });
         }
