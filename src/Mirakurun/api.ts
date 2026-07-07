@@ -55,6 +55,12 @@ export function responseStreamErrorHandler(res: express.Response, err: NodeJS.Er
 }
 
 export async function responseJSON(res: express.Response, body: any): Promise<express.Response> {
+    // 大きな配列 (例: 全番組 /api/programs は 15MB 超) は yieldable-json での
+    // 文字列化に数十秒かかることがある。responseJSON は文字列化が完了するまで
+    // 1 バイトも送信しないため、その間ソケットは無通信となり、Server 側の
+    // socket timeout (既定 15 秒) に達すると接続が破棄されて空応答になる。
+    // 非力な実機でも巨大 JSON を返しきれるよう、この応答に限りタイムアウトを延長する。
+    res.setTimeout(1000 * 60 * 2); // 2 min.
     // this is lighter than res.json()
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200);

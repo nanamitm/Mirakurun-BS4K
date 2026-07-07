@@ -622,7 +622,7 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
                 }
             </ScrollContainer>
 
-            {(state.programs.length === 0 || state.services.length === 0) && !error && <>
+            {(!state.programsLoaded || state.services.length === 0) && !error && <>
                 <NonIdealState
                     icon={<Spinner />}
                     title="ロード中"

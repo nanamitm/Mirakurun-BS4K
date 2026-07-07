@@ -74,6 +74,10 @@ class State extends EventEmitter<StateEventTypes> {
     jobs: JobItem[] = [];
     jobSchedules: JobScheduleItem[] = [];
     programs: Program[] = [];
+    // 全番組 (/api/programs) の初回フェッチ完了フラグ。
+    // events:program から個別番組イベントが先に届くと programs.length が 0 でなくなり
+    // 「読み込み中」を length===0 で判定できないため、明示フラグで区別する。
+    programsLoaded = false;
     serverConfig?: ConfigServer;
 
     private _rpc?: RPCClient;
@@ -152,9 +156,8 @@ class State extends EventEmitter<StateEventTypes> {
 
     async fetchPrograms(): Promise<Program[]> {
         this.programs = await (await fetch("/api/programs")).json();
-        if (this.programs.length > 0) {
-            this.emit("programs", this.programs);
-        }
+        this.programsLoaded = true;
+        this.emit("programs", this.programs);
         return this.programs;
     }
 
@@ -234,6 +237,7 @@ class State extends EventEmitter<StateEventTypes> {
             console.debug("rpc:connected");
 
             this.programs = [];
+            this.programsLoaded = false;
 
             this.statusName = "Connected";
             this.statusIconKey = "normal";
