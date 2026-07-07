@@ -14,6 +14,7 @@
    limitations under the License.
 */
 import { Operation } from "express-openapi";
+import sift from "sift";
 import * as api from "../api";
 import * as apid from "../../../api";
 import _ from "../_";
@@ -21,9 +22,31 @@ import _ from "../_";
 export const get: Operation = (req, res) => {
     let programs: apid.Program[];
 
-    // tslint:disable-next-line:prefer-conditional-expression
-    if (Object.keys(req.query).length !== 0) {
-        programs = _.program.findByQuery(req.query);
+    const query = { ...req.query };
+    const channelType = typeof query.type === "string" ? query.type : undefined;
+    delete query.type;
+
+    if (channelType) {
+        // Map a channel type (GR/BS/CS/SKY/BS4K) to the set of networkIds that
+        // belong to it via the configured services, so an EPG view can fetch a
+        // single type without pulling every network's programs (~15MB → a fraction).
+        const networkIds = new Set<number>();
+        for (const service of _.service.items) {
+            if (service.channel.type === channelType) {
+                networkIds.add(service.networkId);
+            }
+        }
+        programs = [];
+        for (const program of _.program.itemMap.values()) {
+            if (networkIds.has(program.networkId)) {
+                programs.push(program);
+            }
+        }
+        if (Object.keys(query).length !== 0) {
+            programs = programs.filter(sift(query));
+        }
+    } else if (Object.keys(query).length !== 0) {
+        programs = _.program.findByQuery(query);
     } else {
         programs = Array.from(_.program.itemMap.values());
     }
@@ -35,6 +58,13 @@ get.apiDoc = {
     tags: ["programs"],
     operationId: "getPrograms",
     parameters: [
+        {
+            in: "query",
+            name: "type",
+            type: "string",
+            enum: ["GR", "BS", "CS", "SKY", "BS4K"],
+            required: false
+        },
         {
             in: "query",
             name: "networkId",

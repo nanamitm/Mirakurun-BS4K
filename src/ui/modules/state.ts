@@ -161,6 +161,22 @@ class State extends EventEmitter<StateEventTypes> {
         return this.programs;
     }
 
+    // 種別 (channelType) または単一 serviceId で絞った番組のみを取得する。
+    // EPG 番組表は 1 度に 1 種別しか表示しないため、全種別 (~15MB) を引かずに
+    // 表示対象だけを取得してロードを軽くする。グローバルな this.programs
+    // (検索などが全番組を前提に参照する) は変更しない。
+    async fetchProgramsByType(channelType?: string, serviceId?: number): Promise<Program[]> {
+        const params = new URLSearchParams();
+        if (channelType) {
+            params.set("type", channelType);
+        }
+        if (serviceId) {
+            params.set("serviceId", String(serviceId));
+        }
+        const q = params.toString();
+        return await (await fetch(`/api/programs${q ? `?${q}` : ""}`)).json();
+    }
+
     private _joinProgramEvents: () => void;
     async subscribePrograms(forceEmit = false): Promise<void> {
         if (this._joinProgramEvents) {

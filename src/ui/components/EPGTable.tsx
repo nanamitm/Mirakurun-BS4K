@@ -82,7 +82,10 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
     const [services, setServices] = useState<Service[]>(null);
     const [serviceItems, setServiceItems] = useState<JSX.Element[]>(null);
     const [timetableCols, setTimetableCols] = useState<JSX.Element[]>(null);
-    const [programsLoaded, setProgramsLoaded] = useState<boolean>(state.programsLoaded);
+    // 表示中の種別 (または単一 service) の番組のみをローカルに保持する。
+    // グローバルな state.programs (全種別) は EPG 表示では使わない。
+    const [programs, setPrograms] = useState<Program[]>([]);
+    const [programsLoaded, setProgramsLoaded] = useState<boolean>(false);
 
     if (globalServiceId) {
         // 週間番組表
@@ -95,22 +98,40 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
 
     useEffect(() => {
         const onUpdated = () => {
-            setProgramsLoaded(state.programsLoaded);
             setReload(Date.now());
         }
         const onUpdatedLazy = new LazyCaller(0, 1000, onUpdated);
 
         state.on("services", onUpdatedLazy.caller);
-        state.on("programs", onUpdatedLazy.caller);
-
-        state.subscribePrograms(true);
 
         return () => {
             state.off("services", onUpdatedLazy.caller);
-            state.off("programs", onUpdatedLazy.caller);
             onUpdatedLazy.destroy();
         }
     }, []);
+
+    // 表示対象の種別 (または単一 service) の番組だけをフェッチする。
+    // channelType / globalServiceId が変わるたびに取得し直す。
+    useEffect(() => {
+        let cancelled = false;
+        setProgramsLoaded(false);
+        state.fetchProgramsByType(channelType, globalServiceId).then(result => {
+            if (cancelled) {
+                return;
+            }
+            setPrograms(result);
+            setProgramsLoaded(true);
+            setReload(Date.now());
+        }).catch(err => {
+            if (!cancelled) {
+                setError(err);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [channelType, globalServiceId]);
 
     useEffect(() => {
         return () => {
@@ -312,7 +333,7 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
             query.serviceId = services[0].serviceId;
             query.startAt["$lt"] = startTime + 60 * 60 * 24 * 8 * 1000;
         }
-        const filteredPrograms = state.programs.filter(sift(query));
+        const filteredPrograms = programs.filter(sift(query));
 
         console.debug("EPGTable", "filteredPrograms", filteredPrograms);
 
