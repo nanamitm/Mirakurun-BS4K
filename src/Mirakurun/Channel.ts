@@ -281,13 +281,33 @@ export class Channel {
                 readyFn: async () => {
                     await common.sleep(100);
 
+                    // BS4K は TLVFilter 系のため進行中ガードはチャンネル単位 (epgByChannel)。
+                    if (status.epgByChannel[channel.channel] === true) {
+                        log.info("BS4K Channel#%s EPG gathering is already in progress on another stream", channel.channel);
+                        return false;
+                    }
                     if (service.epgReady === true) {
                         const now = Date.now();
-                        if (now - service.epgUpdatedAt > 1000 * 60 * 60 * 6) { // 6 hours
-                            log.info("BS4K Channel#%s EPG gathering is resuming forcibly because reached maximum pause time (6 hours)", channel.channel);
+                        if (startup && now - service.epgUpdatedAt < 1000 * 60 * 10) { // 10 mins
+                            log.info("BS4K Channel#%s EPG gathering has skipped because EPG is already up to date (in 10 mins)", channel.channel);
+                            return false;
+                        }
+                        if (now - service.epgUpdatedAt > 1000 * 60 * 60 * 12) { // 12 hours
+                            log.info("BS4K Channel#%s EPG gathering is resuming forcibly because reached maximum pause time (12 hours)", channel.channel);
                             service.epgReady = false;
                         } else {
-                            return false;
+                            // BS4K の各チャンネルは networkId を共有するため serviceId で当該chに絞る
+                            const currentPrograms = _.program.findByNetworkIdAndTime(service.networkId, now)
+                                .filter(program => program.serviceId === service.serviceId && !!program.name && program.name !== "放送休止");
+                            if (currentPrograms.length === 0) {
+                                const servicePrograms = _.program.findByNetworkId(service.networkId)
+                                    .filter(program => program.serviceId === service.serviceId);
+                                if (servicePrograms.length > 0) {
+                                    log.info("BS4K Channel#%s EPG gathering has skipped because broadcast is off", channel.channel);
+                                    return false;
+                                }
+                                service.epgReady = false;
+                            }
                         }
                     }
 
