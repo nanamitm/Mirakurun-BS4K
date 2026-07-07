@@ -34,6 +34,7 @@ interface TSFilterOptions {
     readonly parseNIT?: boolean;
     readonly parseSDT?: boolean;
     readonly parseEIT?: boolean;
+    readonly parseNITStreams?: boolean;
     readonly tsmfRelTs?: number;
 }
 
@@ -97,6 +98,7 @@ export default class TSFilter extends EventEmitter {
     private _parseNIT = false;
     private _parseSDT = false;
     private _parseEIT = false;
+    private _parseNITStreams = false;
     private _targetNetworkId: number;
     private _enableParseCDT = false;
     private _enableParseDSMCC = false;
@@ -198,6 +200,10 @@ export default class TSFilter extends EventEmitter {
         }
         if (options.parseNIT === true) {
             this._parseNIT = true;
+        }
+        if (options.parseNITStreams === true) {
+            this._parseNIT = true;
+            this._parseNITStreams = true;
         }
         if (options.parseSDT === true) {
             this._parseSDT = true;
@@ -573,7 +579,40 @@ export default class TSFilter extends EventEmitter {
 
         this.emit("network", _network);
 
-        if (this._parsePids.has(pid)) {
+        // BS TSID スキャン用: 自ネットワーク NIT (table_id 0x40) の全 transport_stream
+        // を、衛星 delivery 記述子 (0x43) の周波数付きで emit する。BS の NIT は複数
+        // セクションに分かれるため、_parseNITStreams 時は PID を保持して全セクションを拾う。
+        if (this._parseNITStreams && data.table_id === 0x40) {
+            const streams: { transportStreamId: number; originalNetworkId: number; frequencyKHz: number; }[] = [];
+            for (const ts of data.transport_streams) {
+                let frequencyKHz = -1;
+                for (const desc of ts.transport_descriptors) {
+                    if (desc.descriptor_tag === 0x43) {
+                        // aribts は BCD 4byte を生の 32bit 値として返すため BCD へ復元する。
+                        // 例: 0x01172748 -> "01172748" -> 1172748 -> *10 = 11727480 (kHz)
+                        const bcd = desc.frequency.toString(16).padStart(8, "0");
+                        if (/^\d{8}$/.test(bcd)) {
+                            frequencyKHz = parseInt(bcd, 10) * 10;
+                        }
+                        break;
+                    }
+                }
+                streams.push({
+                    transportStreamId: ts.transport_stream_id,
+                    originalNetworkId: ts.original_network_id,
+                    frequencyKHz
+                });
+            }
+            this.emit("nitStreams", {
+                networkId: data.network_id,
+                sectionNumber: data.section_number,
+                lastSectionNumber: data.last_section_number,
+                streams
+            });
+        }
+
+        // NITStreams スキャン中は全セクションを収集するため PID を保持する。
+        if (this._parsePids.has(pid) && this._parseNITStreams === false) {
             this._parsePids.delete(pid);
         }
     }

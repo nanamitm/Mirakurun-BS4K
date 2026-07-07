@@ -37,6 +37,7 @@ interface StreamSetting {
     parseNIT?: boolean;
     parseSDT?: boolean;
     parseEIT?: boolean;
+    parseNITStreams?: boolean;
     filterTlvStreamId?: number;
 }
 

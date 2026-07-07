@@ -327,6 +327,74 @@ export class Tuner {
         });
     }
 
+    /**
+     * BS TSID スキャン用: BS トランスポンダを 1 つ受信し、自ネットワーク NIT
+     * (table_id 0x40) から全 transport_stream の {tsid, onid, 周波数(kHz)} を取得する。
+     * BS の NIT は 1 回の受信で全トランスポンダを列挙するため、単一チャンネルの受信で
+     * 完全なネットワークマップが得られる。
+     */
+    async scanBSNit(
+        channel: ChannelItem,
+        user: Partial<common.User> = {}
+    ): Promise<{ transportStreamId: number; originalNetworkId: number; frequencyKHz: number; }[]> {
+        const tsFilter = await this._initTS({
+            id: "Mirakurun:scanBSNit()",
+            priority: -1,
+            disableDecoder: true,
+            streamSetting: {
+                channel,
+                parseNITStreams: true
+            },
+            ...user
+        });
+        return new Promise((resolve, reject) => {
+            const byTsid = new Map<number, { transportStreamId: number; originalNetworkId: number; frequencyKHz: number; }>();
+            const seenSections = new Set<number>();
+            let lastSectionNumber = -1;
+            let graceTimer: NodeJS.Timeout = null;
+
+            const hardTimeout = setTimeout(() => tsFilter.close(), 40000);
+
+            tsFilter.on("nitStreams", (nit: {
+                sectionNumber: number;
+                lastSectionNumber: number;
+                streams: { transportStreamId: number; originalNetworkId: number; frequencyKHz: number; }[];
+            }) => {
+                lastSectionNumber = nit.lastSectionNumber;
+                seenSections.add(nit.sectionNumber);
+                for (const s of nit.streams) {
+                    byTsid.set(s.transportStreamId, s);
+                }
+                // 全セクション (0..last) を受信したら、SDT 等を待たず即座に確定する。
+                let complete = true;
+                for (let i = 0; i <= lastSectionNumber; i++) {
+                    if (seenSections.has(i) === false) {
+                        complete = false;
+                        break;
+                    }
+                }
+                if (complete) {
+                    tsFilter.close();
+                } else if (graceTimer === null) {
+                    // 取りこぼしに備え、最初の NIT から一定時間経過で確定させる保険。
+                    graceTimer = setTimeout(() => tsFilter.close(), 10000);
+                }
+            });
+
+            tsFilter.once("close", () => {
+                clearTimeout(hardTimeout);
+                clearTimeout(graceTimer);
+                tsFilter.removeAllListeners("nitStreams");
+
+                if (byTsid.size === 0) {
+                    reject(new Error("stream has closed before NIT received"));
+                } else {
+                    resolve([...byTsid.values()]);
+                }
+            });
+        });
+    }
+
     private _load(): this {
         log.debug("loading tuners...");
 
@@ -460,6 +528,7 @@ export class Tuner {
                         parseNIT: setting.parseNIT,
                         parseSDT: setting.parseSDT,
                         parseEIT: setting.parseEIT,
+                        parseNITStreams: setting.parseNITStreams,
                         tsmfRelTs: setting.channel.tsmfRelTs
                     });
                 }
