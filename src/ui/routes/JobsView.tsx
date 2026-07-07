@@ -482,11 +482,12 @@ function getJobStatusLabel(job: JobItem): string {
     if (job.hasFailed) {
         return `Failed${job.duration ? ` (${Math.round(job.duration / 1000)}s)` : ""}`;
     }
-    if (job.hasAborted) {
-        return "Aborted";
-    }
+    // スキップ時は hasSkipped と hasAborted の両方が立つため、先に hasSkipped を見る。
     if (job.hasSkipped) {
         return "Skipped";
+    }
+    if (job.hasAborted) {
+        return "Aborted";
     }
     return `Finished${job.duration ? ` (${Math.round(job.duration / 1000)}s)` : ""}`;
 }
@@ -496,8 +497,8 @@ function getJobStatusIcon(job: JobItem): any {
     if (job.status === "standby") return "stopwatch";
     if (job.status === "running") return "play";
     if (job.hasFailed) return "error";
-    if (job.hasAborted) return "cross";
     if (job.hasSkipped) return "disable";
+    if (job.hasAborted) return "cross";
     return "tick";
 }
 
@@ -505,6 +506,7 @@ function getJobStatusIntent(job: JobItem): "none" | "primary" | "success" | "war
     if (job.status === "running") return "primary";
     if (job.status === "standby") return "warning";
     if (job.hasFailed) return "danger";
+    if (job.hasSkipped) return "none";
     if (job.hasAborted) return "warning";
     return "success";
 }

@@ -469,7 +469,9 @@ export class Job {
 
         const duration = finishedAt - job.startedAt;
         const statusMsg = ok ? "completed" : "failed";
-        const abortMsg = hasAborted ? " (aborted)" : "";
+        // スキップ (readyFn が false) は内部的に abort("skipped") するため hasAborted も立つ。
+        // ログでも中断と区別できるよう skipped を優先表記する。
+        const abortMsg = hasSkipped ? " (skipped)" : hasAborted ? " (aborted)" : "";
         log.info(`Job#_finishJob() "${job.key}" ${statusMsg}${abortMsg} in ${duration}ms`);
 
         // emit event
