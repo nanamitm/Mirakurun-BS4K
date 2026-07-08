@@ -78,10 +78,6 @@ export const EPGView: React.FC = () => {
 
     let date = DateTime.fromISO(isoDate);
 
-    if (globalServiceId) {
-        date = date.set({ day: now.day });
-    }
-
     if (typeQuery) {
         if (typeQuery === "ALL") {
             if (channelType !== null) {
