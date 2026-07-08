@@ -42,6 +42,9 @@ const scrollState = {
     top: -1,
 };
 
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
 interface Dimensions {
     // headerHeight: number;
     // timescaleWidth: number;
@@ -110,28 +113,56 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
         }
     }, []);
 
-    // 表示対象の種別 (または単一 service) の番組だけをフェッチする。
-    // channelType / globalServiceId が変わるたびに取得し直す。
+    // 表示範囲の番組だけをフェッチする。週間番組表は日単位で順番に取得し、
+    // 非力な実機で巨大な JSON を一括生成しないようにする。
     useEffect(() => {
+        const controller = new AbortController();
         let cancelled = false;
+        const signal = controller.signal;
         setProgramsLoaded(false);
-        state.fetchProgramsByType(channelType, globalServiceId).then(result => {
-            if (cancelled) {
-                return;
+        setPrograms([]);
+        setTimetableCols(null);
+
+        const run = async () => {
+            if (globalServiceId) {
+                const result: Program[] = [];
+                for (let i = 0; i < 8; i++) {
+                    const dayStart = startTime + (i * DAY);
+                    const chunk = await state.fetchProgramsByType(null, globalServiceId, {
+                        startAtGte: i === 0 ? dayStart - (2 * HOUR) : dayStart,
+                        startAtLt: dayStart + DAY,
+                        signal
+                    });
+                    result.push(...chunk);
+                }
+                return result;
             }
-            setPrograms(result);
-            setProgramsLoaded(true);
-            setReload(Date.now());
+            return state.fetchProgramsByType(channelType, null, {
+                startAtGte: startTime - (2 * HOUR),
+                startAtLt: startTime + (28 * HOUR),
+                signal
+            });
+        };
+
+        run().then(result => {
+            if (!cancelled) {
+                setPrograms(result);
+                setProgramsLoaded(true);
+                setReload(Date.now());
+            }
         }).catch(err => {
             if (!cancelled) {
-                setError(err);
+                if (err.name !== "AbortError") {
+                    setError(err);
+                }
             }
         });
 
         return () => {
             cancelled = true;
+            controller.abort();
         };
-    }, [channelType, globalServiceId]);
+    }, [channelType, globalServiceId, startTime]);
 
     useEffect(() => {
         return () => {
@@ -323,15 +354,15 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
 
         const query: Query<Program> = {
             startAt: {
-                $gte: startTime - 60 * 60 * 2 * 1000,
-                $lt: startTime + 60 * 60 * 28 * 1000
+                $gte: startTime - (2 * HOUR),
+                $lt: startTime + (28 * HOUR)
             }
         };
         if (channelType) {
             query.serviceId = { $in: services.map(s => s.serviceId) };
         } else if (globalServiceId) {
             query.serviceId = services[0].serviceId;
-            query.startAt["$lt"] = startTime + 60 * 60 * 24 * 8 * 1000;
+            query.startAt["$lt"] = startTime + (8 * DAY);
         }
         const filteredPrograms = programs.filter(sift(query));
 

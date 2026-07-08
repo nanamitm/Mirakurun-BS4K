@@ -165,22 +165,35 @@ class State extends EventEmitter<StateEventTypes> {
     // EPG 番組表は 1 度に 1 種別しか表示しないため、全種別 (~15MB) を引かずに
     // 表示対象だけを取得してロードを軽くする。グローバルな this.programs
     // (検索などが全番組を前提に参照する) は変更しない。
-    async fetchProgramsByType(channelType?: string, serviceItemId?: number): Promise<Program[]> {
+    async fetchProgramsByType(channelType?: string, serviceItemId?: number, opt: {
+        startAtGte?: number;
+        startAtLt?: number;
+        signal?: AbortSignal;
+    } = {}): Promise<Program[]> {
         const params = new URLSearchParams();
         if (channelType) {
             params.set("type", channelType);
         }
+        if (typeof opt.startAtGte === "number") {
+            params.set("startAtGte", String(opt.startAtGte));
+        }
+        if (typeof opt.startAtLt === "number") {
+            params.set("startAtLt", String(opt.startAtLt));
+        }
         if (serviceItemId) {
-            const serviceRes = await fetch(`/api/services/${serviceItemId}`);
-            if (!serviceRes.ok) {
-                throw await serviceRes.json();
+            let service = this.services.find(s => s.id === serviceItemId);
+            if (!service) {
+                const serviceRes = await fetch(`/api/services/${serviceItemId}`, { signal: opt.signal });
+                if (!serviceRes.ok) {
+                    throw await serviceRes.json();
+                }
+                service = await serviceRes.json();
             }
-            const service: Service = await serviceRes.json();
             params.set("networkId", String(service.networkId));
             params.set("serviceId", String(service.serviceId));
         }
         const q = params.toString();
-        return await (await fetch(`/api/programs${q ? `?${q}` : ""}`)).json();
+        return await (await fetch(`/api/programs${q ? `?${q}` : ""}`, { signal: opt.signal })).json();
     }
 
     private _joinProgramEvents: () => void;

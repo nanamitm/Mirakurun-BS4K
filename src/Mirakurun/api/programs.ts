@@ -19,12 +19,29 @@ import * as api from "../api";
 import * as apid from "../../../api";
 import _ from "../_";
 
+function numberQuery(value: any): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === "string" && value !== "") {
+        const n = Number(value);
+        if (Number.isFinite(n)) {
+            return n;
+        }
+    }
+    return null;
+}
+
 export const get: Operation = (req, res) => {
     let programs: apid.Program[];
 
     const query = { ...req.query };
     const channelType = typeof query.type === "string" ? query.type : undefined;
+    const startAtGte = numberQuery(query.startAtGte);
+    const startAtLt = numberQuery(query.startAtLt);
     delete query.type;
+    delete query.startAtGte;
+    delete query.startAtLt;
 
     if (channelType) {
         // Map a channel type (GR/BS/CS/SKY/BS4K) to the set of networkIds that
@@ -49,6 +66,18 @@ export const get: Operation = (req, res) => {
         programs = _.program.findByQuery(query);
     } else {
         programs = Array.from(_.program.itemMap.values());
+    }
+
+    if (startAtGte !== null || startAtLt !== null) {
+        programs = programs.filter(program => {
+            if (startAtGte !== null && program.startAt < startAtGte) {
+                return false;
+            }
+            if (startAtLt !== null && program.startAt >= startAtLt) {
+                return false;
+            }
+            return true;
+        });
     }
 
     api.responseJSON(res, programs);
@@ -80,6 +109,18 @@ get.apiDoc = {
         {
             in: "query",
             name: "eventId",
+            type: "integer",
+            required: false
+        },
+        {
+            in: "query",
+            name: "startAtGte",
+            type: "integer",
+            required: false
+        },
+        {
+            in: "query",
+            name: "startAtLt",
             type: "integer",
             required: false
         }
