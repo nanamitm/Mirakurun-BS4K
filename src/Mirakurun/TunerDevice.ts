@@ -277,7 +277,7 @@ export default class TunerDevice extends EventEmitter {
 
         const parsed = common.parseCommandForSpawn(cmd);
 
-        this._process = child_process.spawn(parsed.command, parsed.args);
+        this._process = child_process.spawn(parsed.command, parsed.args, { detached: true });
         this._command = cmd;
         this._channel = ch;
 
@@ -382,21 +382,66 @@ export default class TunerDevice extends EventEmitter {
         this._updated();
 
         await new Promise<void>(resolve => {
-            this.once("release", resolve);
+            let released = false;
+            let forceKillTimer: NodeJS.Timeout = null;
+            let forceReleaseTimer: NodeJS.Timeout = null;
+
+            this.once("release", () => {
+                released = true;
+                if (forceKillTimer) {
+                    clearTimeout(forceKillTimer);
+                }
+                if (forceReleaseTimer) {
+                    clearTimeout(forceReleaseTimer);
+                }
+                resolve();
+            });
 
             if (/^dvbv5-zap /.test(this._command) === true) {
-                this._process.kill("SIGKILL");
+                this._killProcess("SIGKILL");
             } else {
-                const timer = setTimeout(() => {
+                forceKillTimer = setTimeout(() => {
                     log.warn("TunerDevice#%d will force killed because SIGTERM timed out...", this._index);
-                    this._process.kill("SIGKILL");
-                }, 6000);
-                this._process.once("exit", () => clearTimeout(timer));
+                    this._killProcess("SIGKILL");
 
-                // regular way
-                this._process.kill("SIGTERM");
+                    forceReleaseTimer = setTimeout(() => {
+                        if (released === false) {
+                            log.warn("TunerDevice#%d will be force released because SIGKILL timed out...", this._index);
+                            this._end();
+                            this._release();
+                        }
+                    }, 3000);
+                }, 6000);
+
+                // Signal the whole process group so shell pipelines and chrooted
+                // tuner children cannot keep the device or stdio fds open.
+                this._killProcess("SIGTERM");
             }
         });
+    }
+
+    private _killProcess(signal: NodeJS.Signals): void {
+        const pid = this._process && this._process.pid;
+        if (!pid) {
+            return;
+        }
+
+        try {
+            process.kill(-pid, signal);
+            return;
+        } catch (err) {
+            if (!err || err.code !== "ESRCH") {
+                log.warn("TunerDevice#%d failed to kill process group with %s: %s", this._index, signal, err.message);
+            }
+        }
+
+        try {
+            this._process.kill(signal);
+        } catch (err) {
+            if (!err || err.code !== "ESRCH") {
+                log.warn("TunerDevice#%d failed to kill process with %s: %s", this._index, signal, err.message);
+            }
+        }
     }
 
     private _release(): void {
