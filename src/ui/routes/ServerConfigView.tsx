@@ -32,6 +32,7 @@ import {
     Section,
     Spinner,
     Switch,
+    Tag,
     TextArea
 } from "@blueprintjs/core";
 import equal from "fast-deep-equal";
@@ -39,11 +40,13 @@ import { Validator as IPValidator } from "ip-num/Validator";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
 import { ConfigImportExportControls } from "../components/ConfigImportExportControls";
-import { ConfigServer, LogLevel } from "../../../api.d";
+import { AcasKeyStatus, ConfigServer, LogLevel } from "../../../api.d";
 
 import "./ServerConfigView.sass";
 
 const configAPI = "/api/config/server";
+const acasConfigAPI = "/api/config/acas";
+const acasKeyPattern = /^[0-9a-fA-F]{64}$/;
 
 const multilineConfigValue = (values?: string[] | null) => (values ?? []).join("\n");
 
@@ -63,6 +66,12 @@ export const ServerConfigView: React.FC = () => {
     const [showSaveDialog, setShowSaveDialog] = useState(false);
     const [saved, setSaved] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [acasConfigured, setAcasConfigured] = useState(false);
+    const [acasKey, setAcasKey] = useState("");
+    const [showAcasKey, setShowAcasKey] = useState(false);
+    const [isSavingAcasKey, setIsSavingAcasKey] = useState(false);
+    const [showDeleteAcasDialog, setShowDeleteAcasDialog] = useState(false);
+    const [acasMessage, setAcasMessage] = useState<{ intent: Intent; text: string } | null>(null);
 
     ui.setTitle("サーバー設定", isLoading);
 
@@ -87,10 +96,14 @@ export const ServerConfigView: React.FC = () => {
 
         (async () => {
             try {
-                const res = await (await fetch(configAPI)).json();
+                const [res, acasStatus] = await Promise.all([
+                    fetch(configAPI).then(response => response.json()),
+                    fetch(acasConfigAPI).then(response => response.json() as Promise<AcasKeyStatus>)
+                ]);
                 console.log("ServerConfigView", "GET", configAPI, "->", res);
                 setEditing({ ...res });
                 setCurrent({ ...res });
+                setAcasConfigured(acasStatus.configured);
                 syncMultilineConfigValues(res);
                 setIsLoading(false);
             } catch (e) {
@@ -168,6 +181,60 @@ export const ServerConfigView: React.FC = () => {
             setSaved(true);
         } catch (err) {
             console.error(err);
+        }
+    };
+
+    const handleAcasSave = async () => {
+        const key = acasKey.trim();
+        if (!acasKeyPattern.test(key)) {
+            return;
+        }
+
+        setIsSavingAcasKey(true);
+        setAcasMessage(null);
+        try {
+            const response = await fetch(acasConfigAPI, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json; charset=utf-8" },
+                body: JSON.stringify({ key })
+            });
+            if (!response.ok) {
+                throw new Error(`ACAS key update failed: ${response.status}`);
+            }
+
+            const status = await response.json() as AcasKeyStatus;
+            setAcasConfigured(status.configured);
+            setAcasKey("");
+            setShowAcasKey(false);
+            setAcasMessage({ intent: Intent.SUCCESS, text: "ACAS マスターキーを更新しました。" });
+        } catch (error) {
+            console.error(error);
+            setAcasMessage({ intent: Intent.DANGER, text: "ACAS マスターキーの更新に失敗しました。" });
+        } finally {
+            setIsSavingAcasKey(false);
+        }
+    };
+
+    const handleAcasDelete = async () => {
+        setShowDeleteAcasDialog(false);
+        setIsSavingAcasKey(true);
+        setAcasMessage(null);
+        try {
+            const response = await fetch(acasConfigAPI, { method: "DELETE" });
+            if (!response.ok) {
+                throw new Error(`ACAS key deletion failed: ${response.status}`);
+            }
+
+            const status = await response.json() as AcasKeyStatus;
+            setAcasConfigured(status.configured);
+            setAcasKey("");
+            setShowAcasKey(false);
+            setAcasMessage({ intent: Intent.SUCCESS, text: "ACAS マスターキーを削除しました。" });
+        } catch (error) {
+            console.error(error);
+            setAcasMessage({ intent: Intent.DANGER, text: "ACAS マスターキーの削除に失敗しました。" });
+        } finally {
+            setIsSavingAcasKey(false);
         }
     };
 
@@ -282,6 +349,74 @@ export const ServerConfigView: React.FC = () => {
                                 />
                             </FormGroup>
                         )}
+                    </div>
+                </Section>
+
+                <Section
+                    className="config-section"
+                    title="ACAS Config"
+                    icon="key"
+                    compact
+                >
+                    <div className="config-form-grid">
+                        <FormGroup
+                            label="ACAS Master Key"
+                            labelFor="acas-master-key"
+                            helperText={acasKey.length > 0 && !acasKeyPattern.test(acasKey.trim()) ? "64文字の16進数で入力してください。" : "BS4K / BS8K の新しいストリームから反映されます。保存済みのキーは表示されません。"}
+                            intent={acasKey.length > 0 && !acasKeyPattern.test(acasKey.trim()) ? Intent.DANGER : Intent.NONE}
+                        >
+                            <div className="acas-status">
+                                <Tag
+                                    icon={acasConfigured ? "tick-circle" : "warning-sign"}
+                                    intent={acasConfigured ? Intent.SUCCESS : Intent.WARNING}
+                                    minimal
+                                >
+                                    {acasConfigured ? "設定済み" : "未設定"}
+                                </Tag>
+                            </div>
+                            <div className="acas-controls">
+                                <InputGroup
+                                    id="acas-master-key"
+                                    type={showAcasKey ? "text" : "password"}
+                                    value={acasKey}
+                                    autoComplete="new-password"
+                                    placeholder="64 hexadecimal characters"
+                                    intent={acasKey.length > 0 && !acasKeyPattern.test(acasKey.trim()) ? Intent.DANGER : Intent.NONE}
+                                    rightElement={
+                                        <Button
+                                            minimal
+                                            icon={showAcasKey ? "eye-off" : "eye-open"}
+                                            title={showAcasKey ? "キーを隠す" : "キーを表示"}
+                                            onClick={() => setShowAcasKey(!showAcasKey)}
+                                        />
+                                    }
+                                    onChange={(event) => {
+                                        setAcasKey(event.target.value);
+                                        setAcasMessage(null);
+                                    }}
+                                />
+                                <Button
+                                    intent="primary"
+                                    icon="floppy-disk"
+                                    text="更新"
+                                    loading={isSavingAcasKey}
+                                    disabled={!acasKeyPattern.test(acasKey.trim()) || isSavingAcasKey}
+                                    onClick={handleAcasSave}
+                                />
+                                <Button
+                                    intent="danger"
+                                    icon="trash"
+                                    text="削除"
+                                    disabled={!acasConfigured || isSavingAcasKey}
+                                    onClick={() => setShowDeleteAcasDialog(true)}
+                                />
+                            </div>
+                            {acasMessage && (
+                                <div className={`acas-message bp5-text-${acasMessage.intent}`}>
+                                    {acasMessage.text}
+                                </div>
+                            )}
+                        </FormGroup>
                     </div>
                 </Section>
 
@@ -548,6 +683,24 @@ export const ServerConfigView: React.FC = () => {
                             >
                                 保存
                             </Button>
+                        </>
+                    }
+                />
+            </Dialog>
+
+            <Dialog
+                isOpen={showDeleteAcasDialog}
+                onClose={() => setShowDeleteAcasDialog(false)}
+                title="ACAS マスターキーを削除"
+            >
+                <DialogBody>
+                    <p>保存されている ACAS マスターキーを削除しますか？</p>
+                </DialogBody>
+                <DialogFooter
+                    actions={
+                        <>
+                            <Button onClick={() => setShowDeleteAcasDialog(false)}>キャンセル</Button>
+                            <Button intent="danger" icon="trash" onClick={handleAcasDelete}>削除</Button>
                         </>
                     }
                 />

@@ -289,6 +289,14 @@ export interface ConfigServer {
     tsplayEndpoint: string;
 }
 
+export interface AcasKeyStatus {
+    configured: boolean;
+}
+
+export interface AcasKeyUpdate {
+    key: string;
+}
+
 /**
  * FATAL: -1
  * ERROR: 0

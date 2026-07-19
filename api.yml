@@ -524,6 +524,23 @@ definitions:
 
   # config --------------------------------------------------------------------
 
+  AcasKeyStatus:
+    type: object
+    required:
+      - configured
+    properties:
+      configured:
+        type: boolean
+
+  AcasKeyUpdate:
+    type: object
+    required:
+      - key
+    properties:
+      key:
+        type: string
+        pattern: '^[0-9a-fA-F]{64}$'
+
   ConfigServer:
     type: object
     properties:
