@@ -18,6 +18,7 @@ import sift from "sift";
 import * as api from "../api";
 import * as apid from "../../../api";
 import _ from "../_";
+import { rejectWhere, WhereQueryError } from "../common";
 
 function numberQuery(value: any): number | null {
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -33,54 +34,63 @@ function numberQuery(value: any): number | null {
 }
 
 export const get: Operation = (req, res) => {
-    let programs: apid.Program[];
+    try {
+        rejectWhere(req.query);
 
-    const query = { ...req.query };
-    const channelType = typeof query.type === "string" ? query.type : undefined;
-    const startAtGte = numberQuery(query.startAtGte);
-    const startAtLt = numberQuery(query.startAtLt);
-    delete query.type;
-    delete query.startAtGte;
-    delete query.startAtLt;
+        let programs: apid.Program[];
 
-    if (channelType) {
-        // Map a channel type (GR/BS/CS/SKY/BS4K) to the set of networkIds that
-        // belong to it via the configured services, so an EPG view can fetch a
-        // single type without pulling every network's programs (~15MB → a fraction).
-        const networkIds = new Set<number>();
-        for (const service of _.service.items) {
-            if (service.channel.type === channelType) {
-                networkIds.add(service.networkId);
+        const query = { ...req.query };
+        const channelType = typeof query.type === "string" ? query.type : undefined;
+        const startAtGte = numberQuery(query.startAtGte);
+        const startAtLt = numberQuery(query.startAtLt);
+        delete query.type;
+        delete query.startAtGte;
+        delete query.startAtLt;
+
+        if (channelType) {
+            // Map a channel type (GR/BS/CS/SKY/BS4K) to the set of networkIds that
+            // belong to it via the configured services, so an EPG view can fetch a
+            // single type without pulling every network's programs (~15MB → a fraction).
+            const networkIds = new Set<number>();
+            for (const service of _.service.items) {
+                if (service.channel.type === channelType) {
+                    networkIds.add(service.networkId);
+                }
             }
-        }
-        programs = [];
-        for (const program of _.program.itemMap.values()) {
-            if (networkIds.has(program.networkId)) {
-                programs.push(program);
+            programs = [];
+            for (const program of _.program.itemMap.values()) {
+                if (networkIds.has(program.networkId)) {
+                    programs.push(program);
+                }
             }
+            if (Object.keys(query).length !== 0) {
+                programs = programs.filter(sift(query));
+            }
+        } else if (Object.keys(query).length !== 0) {
+            programs = _.program.findByQuery(query);
+        } else {
+            programs = Array.from(_.program.itemMap.values());
         }
-        if (Object.keys(query).length !== 0) {
-            programs = programs.filter(sift(query));
+
+        if (startAtGte !== null || startAtLt !== null) {
+            programs = programs.filter(program => {
+                if (startAtGte !== null && program.startAt < startAtGte) {
+                    return false;
+                }
+                if (startAtLt !== null && program.startAt >= startAtLt) {
+                    return false;
+                }
+                return true;
+            });
         }
-    } else if (Object.keys(query).length !== 0) {
-        programs = _.program.findByQuery(query);
-    } else {
-        programs = Array.from(_.program.itemMap.values());
+
+        api.responseJSON(res, programs);
+    } catch (err) {
+        if (err instanceof WhereQueryError) {
+            return api.responseError(res, 400);
+        }
+        throw err;
     }
-
-    if (startAtGte !== null || startAtLt !== null) {
-        programs = programs.filter(program => {
-            if (startAtGte !== null && program.startAt < startAtGte) {
-                return false;
-            }
-            if (startAtLt !== null && program.startAt >= startAtLt) {
-                return false;
-            }
-            return true;
-        });
-    }
-
-    api.responseJSON(res, programs);
 };
 
 get.apiDoc = {
