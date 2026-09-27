@@ -19,10 +19,49 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { promisify } from "util";
 import * as yieldableJSON from "yieldable-json";
 const parseAsync = promisify(yieldableJSON.parseAsync);
-const stringifyAsync = promisify(yieldableJSON.stringifyAsync);
 import Queue from "promise-queue";
 import * as apid from "../../api";
 import * as log from "./log";
+
+/**
+ * `JSON.stringify(data)` for the DB arrays, serialized with the native
+ * serializer `STRINGIFY_CHUNK` elements per event-loop turn.
+ *
+ * yieldable-json's stringifyAsync never blocks the loop for long but is ~26x
+ * slower: a 15.8 MB programs.json (23751 programs) took 18.4 s on the
+ * PIX-SMB400 (native: 0.7 s), and an 8K TLV stream served on the same thread
+ * starved for ~26 s on every save. The output is identical to
+ * `JSON.stringify(data)`: an array serializes as its elements joined by
+ * commas, with undefined / function / symbol elements written as null.
+ */
+const STRINGIFY_CHUNK = 500;
+
+export function stringifyChunked(data: unknown): Promise<string> {
+    if (!Array.isArray(data)) {
+        return Promise.resolve(JSON.stringify(data));
+    }
+    return new Promise((resolve, reject) => {
+        const parts: string[] = new Array(data.length);
+        let i = 0;
+        const step = () => {
+            try {
+                const end = Math.min(i + STRINGIFY_CHUNK, data.length);
+                for (; i < end; i++) {
+                    const json = JSON.stringify(data[i]);
+                    parts[i] = json === undefined ? "null" : json;
+                }
+                if (i < data.length) {
+                    setImmediate(step);
+                } else {
+                    resolve("[" + parts.join(",") + "]");
+                }
+            } catch (e) {
+                reject(e);
+            }
+        };
+        step();
+    });
+}
 
 interface Service extends apid.Service {
     /** @deprecated */
@@ -92,7 +131,7 @@ async function save(path: string, data: any[], integrity: string, retrying = fal
 
     return dbIOQueue.add(async () => {
         try {
-            await writeFile(path, await stringifyAsync(data));
+            await writeFile(path, await stringifyChunked(data));
         } catch (e) {
             if (retrying === false) {
                 // mkdir if not exists
