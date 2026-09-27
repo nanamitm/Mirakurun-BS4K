@@ -37,6 +37,7 @@ import {
 } from "arib-mmt-tlv-ts/mmt-si.js";
 import { TLVNetworkInformationTable } from "arib-mmt-tlv-ts/tlv-si.js";
 import MHEPG from "./MHEPG";
+import TLVPacketAligner from "./TLVPacketAligner";
 import { MH_LOGO_TRANSMISSION_TYPE_DIRECT } from "arib-mmt-tlv-ts/mmt-si-descriptor.js";
 import { mjdBCDToUnixEpoch } from "arib-mmt-tlv-ts/utils.js";
 import * as db from "./db";
@@ -94,6 +95,8 @@ export default class TLVFilter extends EventEmitter {
 
     // output
     private _output: Writable;
+    // only whole TLV packets are written, so the output starts and ends on a packet boundary
+    private _aligner = new TLVPacketAligner();
 
     // options
     private _provideServiceId: number;
@@ -223,7 +226,9 @@ export default class TLVFilter extends EventEmitter {
         }
         this._reader.push(chunk);
         if (this._ready) {
-            this._output.write(chunk);
+            for (const packets of this._aligner.push(chunk)) {
+                this._output.write(packets);
+            }
         }
     }
 
