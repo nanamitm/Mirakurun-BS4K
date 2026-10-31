@@ -1,91 +1,111 @@
-const { afterEach, describe, it } = require("node:test");
+const { describe, it, before, after } = require("node:test");
 const assert = require("assert");
-const { mkdtemp, readFile, rm } = require("fs/promises");
-const { tmpdir } = require("os");
-const { join } = require("path");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const db = require("../lib/Mirakurun/db");
 
-let temporaryDirectory;
-
-afterEach(async () => {
-  delete process.env.PROGRAMS_DB_PATH;
-  if (temporaryDirectory) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-    temporaryDirectory = undefined;
-  }
-});
-
-function programs(n) {
-  const items = [];
-  for (let i = 0; i < n; i++) {
-    items.push({
-      id: 3176063488000 + i,
+function createPrograms(count) {
+  const programs = [];
+  for (let i = 0; i < count; i++) {
+    programs.push({
+      id: 3239101024 * 100000 + i,
       eventId: i,
-      serviceId: 63488,
-      networkId: 31760,
-      startAt: 1790000000000 + i * 60000,
-      duration: 60000,
+      serviceId: 1024,
+      networkId: 32391,
+      startAt: 1700000000000 + i * 60000,
+      duration: 1800000,
       isFree: true,
-      name: `番組 ${i} 🎬 "quoted" \\ back sep`,
-      genres: [{ lv1: 2, lv2: 4, un1: 15, un2: 15 }]
+      name: `番組${i}`,
+      description: "説明\n\"引用\"",
+      extended: { "番組内容": "内容".repeat(200) }
     });
   }
-  return items;
+  return programs;
 }
 
-describe("[db.spec] stringifyChunked", () => {
-  it("matches JSON.stringify across chunk boundaries", async () => {
-    for (const n of [0, 1, 499, 500, 501, 1234]) {
-      const data = programs(n);
-      assert.strictEqual(await db.stringifyChunked(data), JSON.stringify(data));
+describe("[db.spec] db.ts: savePrograms() / loadPrograms()", () => {
+  let tmpDir;
+  let originalPath;
+
+  before(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mirakurun-db-"));
+    originalPath = process.env.PROGRAMS_DB_PATH;
+  });
+
+  after(() => {
+    if (originalPath === undefined) {
+      delete process.env.PROGRAMS_DB_PATH;
+    } else {
+      process.env.PROGRAMS_DB_PATH = originalPath;
     }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("matches JSON.stringify for elements JSON.stringify maps to null or rewrites", async () => {
-    const data = [
-      undefined,
-      () => 1,
-      Symbol("x"),
-      null,
-      NaN,
-      { a: undefined, d: new Date(0), toJSONTest: { toJSON: () => "custom" } },
-      [1, [2, undefined]],
-      "str"
-    ];
-    assert.strictEqual(await db.stringifyChunked(data), JSON.stringify(data));
+  it("writes the same JSON as JSON.stringify and loads it back", async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "programs.json");
+    const programs = createPrograms(500); // 書き出しの 1 回分より大きいデータ
+
+    await db.savePrograms(programs, "integrity-a");
+
+    const json = fs.readFileSync(process.env.PROGRAMS_DB_PATH, "utf8");
+    assert.strictEqual(json, JSON.stringify([{ __integrity__: "integrity-a" }, ...programs]));
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a"), programs);
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a", true), programs);
+    assert.deepStrictEqual(await db.loadPrograms("integrity-b"), []);
   });
 
-  it("serializes non-array values like JSON.stringify", async () => {
-    for (const value of [{ a: 1 }, "s", 1, null]) {
-      assert.strictEqual(await db.stringifyChunked(value), JSON.stringify(value));
-    }
+  it("does not modify the given array", async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "programs.json");
+    const programs = createPrograms(3);
+
+    await db.savePrograms(programs, "integrity-a");
+
+    assert.strictEqual(programs.length, 3);
+    assert.strictEqual(programs[0].eventId, 0);
   });
 
-  it("yields to the event loop between chunks", async () => {
-    let ticks = 0;
-    const timer = setInterval(() => ticks++, 0);
-    const done = db.stringifyChunked(programs(20000));
-    await done;
-    clearInterval(timer);
-    assert.ok(ticks > 0, "no timer callbacks ran while serializing");
+  it("overwrites a larger existing file", async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "programs.json");
+
+    await db.savePrograms(createPrograms(100), "integrity-a");
+    await db.savePrograms(createPrograms(1), "integrity-a");
+
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a"), createPrograms(1));
   });
 
-  it("rejects when an element cannot be serialized", async () => {
-    const cyclic = {};
-    cyclic.self = cyclic;
-    await assert.rejects(db.stringifyChunked([1, cyclic]), TypeError);
+  it("saves an empty array", async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "programs.json");
+
+    await db.savePrograms([], "integrity-a");
+
+    assert.strictEqual(fs.readFileSync(process.env.PROGRAMS_DB_PATH, "utf8"), "[{\"__integrity__\":\"integrity-a\"}]");
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a"), []);
   });
 
-  it("savePrograms writes a DB that loadPrograms reads back", async () => {
-    temporaryDirectory = await mkdtemp(join(tmpdir(), "mirakurun-db-"));
-    process.env.PROGRAMS_DB_PATH = join(temporaryDirectory, "programs.json");
-    const data = programs(1234);
+  it("keeps the existing file when saving fails", async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "programs.json");
+    const programs = createPrograms(500);
+    await db.savePrograms(programs, "integrity-a");
+    const before = fs.readFileSync(process.env.PROGRAMS_DB_PATH);
 
-    await db.savePrograms(data.slice(), "integrity-1");
+    // JSON.stringify が途中の番組で失敗する
+    const broken = createPrograms(500);
+    broken[400].extra = 1n;
+    await db.savePrograms(broken, "integrity-a");
 
-    const saved = JSON.parse(await readFile(process.env.PROGRAMS_DB_PATH, "utf8"));
-    assert.deepStrictEqual(saved[0], { __integrity__: "integrity-1" });
-    assert.deepStrictEqual(await db.loadPrograms("integrity-1"), data);
+    assert.ok(fs.readFileSync(process.env.PROGRAMS_DB_PATH).equals(before));
+    assert.strictEqual(fs.existsSync(`${process.env.PROGRAMS_DB_PATH}.tmp`), false);
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a"), programs);
+  });
+
+  it("creates the missing directory", { timeout: 5000 }, async () => {
+    process.env.PROGRAMS_DB_PATH = path.join(tmpDir, "missing", "dir", "programs.json");
+    const programs = createPrograms(2);
+
+    await db.savePrograms(programs, "integrity-a");
+
+    assert.deepStrictEqual(await db.loadPrograms("integrity-a"), programs);
   });
 });
