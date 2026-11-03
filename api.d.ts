@@ -425,6 +425,7 @@ export interface Status {
     streamCount: {
         tunerDevice: number;
         tsFilter: number;
+        tlvFilter?: number;
         decoder: number;
     };
     errorCount: {

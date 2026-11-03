@@ -75,9 +75,11 @@ const StatusSection: React.FC<{ status: Status }> = ({ status }) => {
         { label: "Node.js Version", text: status.process?.versions?.node },
         { label: "Memory (RSS)", text: `${Math.round(status.process?.memoryUsage?.rss / 1024 / 1024)} MB` },
         { label: "EPG Gathering Network IDs", text: status.epg.gatheringNetworks.map(id => `0x${id.toString(16).toUpperCase()}`).join(", ") || "-" },
+        { label: "EPG Gathering Channels (BS4K)", text: status.epg.gatheringChannels?.join(", ") || "-" },
         { label: "EPG Stored Events", text: `${status.epg.storedEvents} Events` },
         { label: "TunerDevice Streams", text: `${status.streamCount.tunerDevice}` },
         { label: "TSFilter Streams", text: `${status.streamCount.tsFilter}` },
+        { label: "TLVFilter Streams", text: `${status.streamCount.tlvFilter ?? 0}` },
         { label: "Decoder Streams", text: `${status.streamCount.decoder}` },
         { label: "RPC Connections", text: `${status.rpcCount}` }
     ];

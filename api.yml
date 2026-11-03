@@ -747,6 +747,10 @@ definitions:
             type: array
             items:
               $ref: '#/definitions/NetworkId'
+          gatheringChannels:
+            type: array
+            items:
+              type: string
           storedEvents:
             type: integer
       rpcCount:
@@ -757,6 +761,8 @@ definitions:
           tunerDevice:
             type: integer
           tsFilter:
+            type: integer
+          tlvFilter:
             type: integer
           decoder:
             type: integer
