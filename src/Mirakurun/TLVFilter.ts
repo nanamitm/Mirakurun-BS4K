@@ -97,6 +97,7 @@ export default class TLVFilter extends EventEmitter {
     private _output: Writable;
     // only whole TLV packets are written, so the output starts and ends on a packet boundary
     private _aligner = new TLVPacketAligner();
+    private _droppedBytes = 0;
 
     // options
     private _provideServiceId: number;
@@ -236,7 +237,7 @@ export default class TLVFilter extends EventEmitter {
                 return;
             }
             if (this._ready) {
-                this._output.write(packets);
+                this._writeOutput(packets);
             }
         }
     }
@@ -250,6 +251,24 @@ export default class TLVFilter extends EventEmitter {
 
     close(): void {
         this._close();
+    }
+
+    /** 書き出せない間は送信待ちを増やさず、パケット単位で破棄する */
+    private _writeOutput(packets: Buffer): void {
+        if (this._output.writableLength >= this._output.writableHighWaterMark) {
+            if (this._droppedBytes === 0) {
+                ++status.errorCount.bufferOverflow;
+                log.warn("TLVFilter#_writeOutput: output is full, dropping packets (serviceId=%s)", this._provideServiceId);
+            }
+            this._droppedBytes += packets.length;
+            return;
+        }
+
+        if (this._droppedBytes !== 0) {
+            log.warn("TLVFilter#_writeOutput: output has recovered, dropped %d bytes (serviceId=%s)", this._droppedBytes, this._provideServiceId);
+            this._droppedBytes = 0;
+        }
+        this._output.write(packets);
     }
 
     private _onPLT(plt: PackageListTable): void {
