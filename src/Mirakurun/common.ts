@@ -148,7 +148,7 @@ export function decodeUTF8(buffer: Uint8Array | Buffer): string {
     return Buffer.from(buffer).toString("utf8");
 }
 
-const JSON_ARRAY_CHUNK_LENGTH = 16 * 1024;
+const JSON_ARRAY_CHUNK_LENGTH = 32 * 1024;
 
 /** 配列を連結した JSON 配列を、全体を 1 つの文字列にせず一定の長さごとに文字列化する */
 export function* stringifyJSONArray(...arrays: readonly unknown[][]): Generator<string> {

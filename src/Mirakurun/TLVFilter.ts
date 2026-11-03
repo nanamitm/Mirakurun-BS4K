@@ -232,6 +232,9 @@ export default class TLVFilter extends EventEmitter {
         }
     }
 
+    /** TunerDevice が TSFilter と同様に呼ぶ。出力を保留しないので何もしない */
+    flush(): void { }
+
     end(): void {
         this._close();
     }
