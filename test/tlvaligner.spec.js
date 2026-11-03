@@ -1,7 +1,7 @@
 const { describe, it } = require("node:test");
 const assert = require("assert");
 
-const { default: TLVPacketAligner, findTLVPacketStart } = require("../lib/Mirakurun/TLVPacketAligner");
+const { default: TLVPacketAligner, findTLVPacketStart, selectReaderPackets } = require("../lib/Mirakurun/TLVPacketAligner");
 
 // deterministic PRNG (mulberry32)
 function rng(seed) {
@@ -119,5 +119,23 @@ describe("[tlvaligner.spec] TLVPacketAligner", () => {
     // only two whole packets after the candidate: the chain cannot be checked yet
     assert.deepStrictEqual(findTLVPacketStart(Buffer.concat(p.slice(0, 2))), { offset: 0, pending: true });
     assert.deepStrictEqual(findTLVPacketStart(Buffer.from([0x00, 0x7f, 0x01])), { offset: 1, pending: true });
+  });
+
+  it("selectReaderPackets drops null and compressed-header MPU packets only", () => {
+    const packet = (type, ...payload) => Buffer.from([0x7f, type, 0x00, payload.length, ...payload]);
+    const si = packet(0x03, 0x00, 0x10, 0x61, 0x00, 0x02); // compressed, MMTP SI
+    const mpu = packet(0x03, 0x00, 0x10, 0x61, 0x00, 0x40); // compressed, MMTP MPU (upper bits ignored)
+    const fullMpu = packet(0x03, 0x00, 0x10, 0x60, 0x00, 0x00); // full header keeps the context
+    const tlvSi = packet(0xfe, 0x40, 0x00);
+    const ipv6 = packet(0x02, 0x60);
+    const nul = packet(0xff, 0xff);
+    const short = packet(0x03, 0x00);
+
+    const select = (...p) => selectReaderPackets(Buffer.concat(p)).map(b => b.toString("hex"));
+    const hex = (...p) => Buffer.concat(p).toString("hex");
+
+    assert.deepStrictEqual(select(nul, mpu), []);
+    assert.deepStrictEqual(select(si, tlvSi, fullMpu, ipv6, short), [hex(si, tlvSi, fullMpu, ipv6, short)]);
+    assert.deepStrictEqual(select(mpu, si, tlvSi, nul, mpu, ipv6, mpu), [hex(si, tlvSi), hex(ipv6)]);
   });
 });

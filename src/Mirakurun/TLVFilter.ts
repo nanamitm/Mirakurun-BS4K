@@ -37,7 +37,7 @@ import {
 } from "arib-mmt-tlv-ts/mmt-si.js";
 import { TLVNetworkInformationTable } from "arib-mmt-tlv-ts/tlv-si.js";
 import MHEPG from "./MHEPG";
-import TLVPacketAligner from "./TLVPacketAligner";
+import TLVPacketAligner, { selectReaderPackets } from "./TLVPacketAligner";
 import { MH_LOGO_TRANSMISSION_TYPE_DIRECT } from "arib-mmt-tlv-ts/mmt-si-descriptor.js";
 import { mjdBCDToUnixEpoch } from "arib-mmt-tlv-ts/utils.js";
 import * as db from "./db";
@@ -224,9 +224,18 @@ export default class TLVFilter extends EventEmitter {
         if (this._closed) {
             throw new Error("TLVFilter has closed already");
         }
-        this._reader.push(chunk);
-        if (this._ready) {
-            for (const packets of this._aligner.push(chunk)) {
+        for (const packets of this._aligner.push(chunk)) {
+            for (const readerPackets of selectReaderPackets(packets)) {
+                // a listener of the parsed tables may close this filter
+                if (this._closed) {
+                    return;
+                }
+                this._reader.push(readerPackets);
+            }
+            if (this._closed) {
+                return;
+            }
+            if (this._ready) {
                 this._output.write(packets);
             }
         }

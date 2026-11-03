@@ -24,6 +24,51 @@ function isTLVPacketType(type: number): boolean {
     return type === 0x01 || type === 0x02 || type === 0x03 || type === 0xfe || type === 0xff;
 }
 
+const TLV_TYPE_COMPRESSED = 0x03;
+const TLV_TYPE_NULL = 0xff;
+const CID_HEADER_TYPE_COMPRESSED = 0x61;
+const MMTP_PAYLOAD_TYPE_MPU = 0x00;
+
+// null packets and media (MPU) in a compressed-header packet carry no SI, which is all TLVFilter reads.
+// Full-header packets are kept since the reader takes its header compression context from them.
+function isReaderPacket(buf: Buffer, pos: number): boolean {
+    const type = buf[pos + 1];
+    if (type === TLV_TYPE_NULL) {
+        return false;
+    }
+    // TLV header(4) + CID and sequence number(2) + CID header type(1) + MMTP flags(1) + MMTP payload type(1)
+    return !(
+        type === TLV_TYPE_COMPRESSED &&
+        buf.readUInt16BE(pos + 2) >= 5 &&
+        buf[pos + 6] === CID_HEADER_TYPE_COMPRESSED &&
+        (buf[pos + 8] & 0x3f) === MMTP_PAYLOAD_TYPE_MPU
+    );
+}
+
+/** Runs of the packets in `buf`, which must hold whole TLV packets, that the MMT/TLV reader needs. */
+export function selectReaderPackets(buf: Buffer): Buffer[] {
+    const out: Buffer[] = [];
+    let start = -1;
+    let pos = 0;
+
+    while (pos + TLV_HEADER_SIZE <= buf.length) {
+        if (isReaderPacket(buf, pos)) {
+            if (start === -1) {
+                start = pos;
+            }
+        } else if (start !== -1) {
+            out.push(buf.subarray(start, pos));
+            start = -1;
+        }
+        pos += TLV_HEADER_SIZE + buf.readUInt16BE(pos + 2);
+    }
+
+    if (start !== -1) {
+        out.push(buf.subarray(start, pos));
+    }
+    return out;
+}
+
 export interface TLVPacketStart {
     offset: number;
     /** the candidate's chain runs past the end of the buffer; decide when more data arrives */
