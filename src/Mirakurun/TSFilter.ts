@@ -157,6 +157,13 @@ export default class TSFilter extends EventEmitter {
     private _logoDataTimer: NodeJS.Timeout;
     private _provideEventLastDetectedAt = -1;
     private _provideEventTimeout: NodeJS.Timeout = null;
+    // 作成してから準備完了と最初の出力までの時間を計測するための作成時刻
+    private _createdAt = Date.now();
+    private _outputStarted = false;
+    // 準備ができてから PAT を保留したか、書き出したか (最初の PAT を書き出すまでは、最初の出力を遅らせないため保留しない)
+    // (準備ができる前に保留した PAT は、上限を超えて破棄される場合があるため数えない)
+    private _patBuffered = false;
+    private _patWritten = false;
 
     /** Number divisible by a multiple of 188 */
     private _maxBufferBytesBeforeReady: number = (() => {
@@ -261,6 +268,7 @@ export default class TSFilter extends EventEmitter {
 
     /**
      * @param defer true の場合は出力を保留する (同じチューナーの全ストリームの出力をまとめて `flush()` するため)
+     * (準備ができてから最初の PAT を書き出すまでは、最初の出力を遅らせないため保留しない)
      */
     write(chunk: Buffer, defer = false): void {
         if (this._closed) {
@@ -313,7 +321,7 @@ export default class TSFilter extends EventEmitter {
             });
         }
 
-        if (defer === false) {
+        if (defer === false || (this._ready && this._patWritten === false)) {
             this.flush();
         }
     }
@@ -342,6 +350,11 @@ export default class TSFilter extends EventEmitter {
         // 上限を超えた分を古いパケットから破棄する
         let excess = this._bufferBytes - this._maxBufferBytesBeforeReady;
         if (excess > 0) {
+            // 最初の PAT を書き出す前は、保留した PAT も破棄した可能性があるため、次の PAT を保留するまでは PAT を書き出したとしない
+            // (最初の PAT を書き出した後は、最初の出力を遅らせないための判定には使わないため戻さない)
+            if (this._patWritten === false) {
+                this._patBuffered = false;
+            }
             this._bufferBytes -= excess;
             this._bufferSourceBytes = this._bufferBytes;
             let head = 0;
@@ -460,6 +473,10 @@ export default class TSFilter extends EventEmitter {
         }
         ++info.packet;
 
+        if (pid === 0 && this._ready) {
+            this._patBuffered = true;
+        }
+
         // PAT (0) rewriting
         if (pid === 0 && this._pmtPid !== -1) {
             const packet = Buffer.allocUnsafe(PACKET_SIZE);
@@ -506,6 +523,12 @@ export default class TSFilter extends EventEmitter {
 
     private _writeBuffer(): void {
         const buffer = this._buffer;
+
+        if (this._outputStarted === false) {
+            this._outputStarted = true;
+            log.debug("TSFilter: first output in %dms (serviceId=%d)", Date.now() - this._createdAt, this._provideServiceId);
+        }
+        this._patWritten = this._patBuffered;
 
         if (buffer.length === 1) {
             this._output.write(buffer[0]);
@@ -652,7 +675,7 @@ export default class TSFilter extends EventEmitter {
         if (this._ready === false && this._provideServiceId !== null && this._provideEventId === null) {
             this._ready = true;
 
-            log.info("TSFilter#_onPMT: now ready for serviceId=%d", this._provideServiceId);
+            log.info("TSFilter#_onPMT: now ready for serviceId=%d in %dms", this._provideServiceId, Date.now() - this._createdAt);
         }
 
         if (data.program_info[0]) {
@@ -798,7 +821,7 @@ export default class TSFilter extends EventEmitter {
                 if (this._ready === false) {
                     this._ready = true;
 
-                    log.info("TSFilter#_onEIT: now ready for eventId=%d", this._provideEventId);
+                    log.info("TSFilter#_onEIT: now ready for eventId=%d in %dms", this._provideEventId, Date.now() - this._createdAt);
                 }
             } else {
                 if (this._ready) {
